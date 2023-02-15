@@ -1,0 +1,144 @@
+---
+title: "A1"
+author: "Hanqiu(Cici)Yu"
+date: '2023-01-09'
+output: html_document
+---
+###Q1###
+```{R}
+set.seed(3459)
+m <- matrix(rnorm(10010000),nrow=10000)
+m
+```
+
+###Q2###
+```{r}
+#Treat the first column as “y” and the remaining 1000 columns as x’s.
+y <- m[,1]
+y
+x <- m[,2:1001]
+x
+```
+
+###Q3###
+The intercept is needed here. The intercept provides a default y value when x equals to 0. When the x in the model did not start to regress, the intercept sometimes might be meaningful to represent the starting value of the response variable. Moreover, if we do not add intercept in the model, the OLS regression will always go through the origin, it is hard to detect other data pattern other than the pattern go through the origin. For example, the data points in one quadrant might be have a negative negative linear coefficient, if the model go through the origin, it will always perform a positive linear coefficient.
+```{r}
+#Regress y on x’s
+#add intercept can observe pattern
+mod <- lm(y~x)
+mod_sum <- summary(mod)
+```
+
+###Q4###
+It shows a uniform distribution
+```{r}
+extrac_pvalue <- mod_sum$coefficients[,4]
+hist(extrac_pvalue,breaks=10)
+```
+###Q5###
+I expect to find knowing alpha*(# of variables) variables are false positive.
+If I set up the alpha value as 0.05, so I expect there are 0.05x1000 = 50 variables are false positive, 950 variables are significant. If the alpha value is 0.01,  I expect there are 0.01x1000 = 10 variables are false positive, 990 variables are significant. 
+It tells us that there are 50% of significant tests are false discoveries.
+```{r}
+mod_sum
+```
+###Q6###
+1000 tests, false discovery rate = 10% = 0.1  
+If alpha = 0.05, the ranking of the p value is the following.
+```{r}
+extrac_pvalue[order(extrac_pvalue)]
+
+#calculate which tests are significant, No true 
+#BH procedure
+0.1*(1/1000)
+0.000127812<=0.1*(1/1000)
+```
+According the BH procedure, the smallest p value from the model is larger than the p critical value (BH procedure). Therefore, we could define that the p value from the model are all false positives.
+
+###Q7###
+In the price column, there are 98 rows above 10000, 61 rows above 15000. The histogram of price are right skewed, so it determines most cars have low price between 10000 to 20000. From the plotted graph, the engine power and horse power are positively related to the price.
+```{r}
+data <- read.csv("E:\\UC Davis\\2023 Winter\\452\\datasets\\autos.csv")
+
+#explore
+nrow(data)
+data[1,]
+data[1:3,]
+summary(data)
+data[data$price>10000,]
+data[data$price>15000,]
+# 98 rows above 10000
+# 61 rows above 15000
+
+make <- as.factor(data$make)
+levels(make)
+
+hist(data$price)
+plot(data$price~make)
+plot(data$price~as.factor(data$fuel_type))
+plot(data$price~data$num_of_cylinders)
+plot(data$price~data$engine_size)
+plot(data$price~data$horsepower)
+
+plot(data$price~data$horsepower,data=data,log="y")
+plot(data$price~data$horsepower,data=data,log="y",col=as.factor(data$make))
+#legend("topright",fill=1:3,legend=levels(data$make))
+#legend?
+```
+###Q8###
+In my model, I picked the variables which are highly related to price, it will affect the price either positively or negatively, but they all have some linearity with the variable log(price). 
+I also ran a step wise regression to test which parameters performs sigificantly base on the start of full model.
+```{r}
+#model selection 1
+price<-data$price
+model <- glm(log(price)~make+data$fuel_type+data$aspiration+data$body_style+data$drive_wheels+data$wheel_base+data$curb_weight+data$engine_type+data$num_of_cylinders+data$engine_size+data$fuel_system+data$horsepower)
+model <- summary(model)
+model
+
+#stepwise regression
+full <- lm(log(price)~.,data = data)
+summary(full)
+
+library(MASS)
+step <- stepAIC(full,direction="both",trace=FALSE)
+step <- summary(step)
+step
+
+pvalue <- model$coefficients[,4]
+hist(pvalue)
+
+pvalue_2 <- step$coefficients[,4]
+hist(pvalue_2)
+```
+
+###Q9###
+In the autos.csv data set and context, the false discovery might lead mistaken that some variables might be sigificant to predict the price but actually they are not (and vice versa). So it will affect the validity of the model and the following decision making process.
+
+In general, false discovery will increase the probability of generating type I or type II error. For type I error, It will provide misinformation that the hypothesis or the regression model might work but it in fact does not. For type II error, it will provide the misinformation that the hypothesis or the regression model in fact is significant but still choose to not use it. So it will lead negative consequence and miss some valuable opportunities.
+
+###Q10###
+```{r}
+fdr <- function(pvals, q, plotit=FALSE){
+  pvals <- pvals[!is.na(pvals)]
+  N <- length(pvals)
+  
+  k <- rank(pvals, ties.method="min")
+  alpha <- max(pvals[ pvals <= (q*k/N) ])
+  
+  if(plotit){
+    sig <- factor(pvals <= alpha)
+    o <- order(pvals)
+    plot(pvals[o], log="xy", col=c("grey60","red")[sig[o]], pch=20, 
+      ylab="p-values", xlab="tests ordered by p-value", main = paste('FDR =',q))
+    lines(1:N, q*(1:N) / N)
+  }
+  
+  return(alpha)
+}
+#model 1 which I picked for variables, and it does not include an intercept
+fdr(pvalue[2:43],0.1,plotit=T)
+
+#model after stepwise regression
+fdr(pvalue_2,0.1,plotit=T)
+```
+
